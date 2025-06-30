@@ -41,6 +41,8 @@ function applyOverrides(configArray, country) {
   }))
 }
 
+// GET /config — get all parameters
+// This endpoint supports caching for 60 seconds
 app.get('/config', async (req, res) => {
   const country = req.query.country
   const apiKey = req.headers['x-api-key']
@@ -74,9 +76,7 @@ app.get('/config', async (req, res) => {
   }
 })
 
-
-
-// Example: POST /config (Firebase Auth token)
+// POST /config — create a new parameter
 app.post('/config', async (req, res) => {
   const authHeader = req.headers.authorization
   const token = authHeader?.split(' ')[1]
@@ -105,8 +105,7 @@ app.post('/config', async (req, res) => {
   }
 })
 
-
-// PUT /config/:key — update a parameter
+//Update /config/:key — update a parameter
 app.put('/config/:key', async (req, res) => {
   const authHeader = req.headers.authorization
   const token = authHeader?.split(' ')[1]
@@ -174,7 +173,8 @@ app.delete('/config/:key', async (req, res) => {
   }
 })
 
-
+//This endpoint is used to seed default configuration values,it can be run once to populate the database with initial values.
+// It should not be exposed in production. It is intended for development or initial setup only. It is optional 
 async function seedDefaults() {
   const configRef = db.collection('config')
 
@@ -266,15 +266,15 @@ async function seedDefaults() {
         createdBy: item.createdBy,
         countryOverrides: item.countryOverrides || {}
     })
-    console.log(`✅ Seeded config: ${item.key}`)
+    console.log(`Seeded config: ${item.key}`)
   }
 }
 
 
 seedDefaults().then(() => {
   app.listen(PORT, () => {
-    console.log(`🚀 Server running at http://localhost:${PORT}`)
+    console.log(`Server running`)
   })
 }).catch(err => {
-  console.error('❌ Failed to seed defaults:', err)
+  console.error('Failed to seed defaults:', err)
 })
