@@ -61,3 +61,7 @@ Example:
 curl -X DELETE "https://codeway-backend-production-3ffb.up.railway.app/config/feature_enabled" \
   -H "Authorization: Bearer <YOUR_TOKEN>" \
   -H "x-api-key: your-api-key"
+
+# Deployment
+
+I deployed the frontend using netlify and backend using railway. They are both deploying from github repos using Docker. I manually created environment variables in both services using the variables in .env files. A user can edit the environment variables easily to deploy the project anywhhere at anytime. There is no any hardcoded deployment variables in both backend and frontend. 
