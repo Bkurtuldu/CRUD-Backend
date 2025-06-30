@@ -29,34 +29,52 @@ admin.initializeApp({
 
 const db = admin.firestore()
 
-// Example: GET /config (API key-based)
-app.get('/config', (req, res) => {
+let configCache = null
+let lastFetchTime = 0
+const CACHE_DURATION_MS = 60 * 1000 
+
+function applyOverrides(configArray, country) {
+  return configArray.map(doc => ({
+    id: doc.id,
+    key: doc.key,
+    value: country && doc.countryOverrides?.find(ov => ov.country === country)?.value || doc.value
+  }))
+}
+
+app.get('/config', async (req, res) => {
   const country = req.query.country
   const apiKey = req.headers['x-api-key']
+
   if (apiKey !== process.env.API_KEY) {
     return res.status(403).json({ error: 'Invalid API key' })
   }
 
-  db.collection('config')
-    .get()
-    .then(snapshot => {
-        if (snapshot.empty) {
-            return res.status(404).json({ error: 'No configuration found' })
-        }
-        const config = []
-        snapshot.forEach(doc => config.push({
-          id: doc.id,
-          key: doc.data().key,
-          value: country && doc.data().countryOverrides?.[country] ? doc.data().countryOverrides[country] : doc.data().value,
-          description: doc.data().description,
-          create_date: doc.data().create_date,
-          updatedBy: doc.data().updatedBy,
-          updatedAt: doc.data().updatedAt,
-          created_by: doc.data().createdBy,  
-         }))
-        res.json(config)
-  })
+  const now = Date.now()
+
+  if (configCache && now - lastFetchTime < CACHE_DURATION_MS) {
+    return res.json(applyOverrides(configCache, country))
+  }
+
+  try {
+    const snapshot = await db.collection('config').get()
+    if (snapshot.empty) {
+      return res.status(404).json({ error: 'No configuration found' })
+    }
+
+    const freshConfig = []
+    snapshot.forEach(doc => {
+      freshConfig.push({ id: doc.id, ...doc.data() })
+    })
+
+    configCache = freshConfig
+    lastFetchTime = now
+    res.json(applyOverrides(freshConfig, country))
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' })
+  }
 })
+
+
 
 // Example: POST /config (Firebase Auth token)
 app.post('/config', async (req, res) => {
