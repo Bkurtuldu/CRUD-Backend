@@ -41,40 +41,50 @@ function applyOverrides(configArray, country) {
   }))
 }
 
-// GET /config — get all parameters
-// This endpoint supports caching for 60 seconds
+// GET /config — fetch configuration parameters
 app.get('/config', async (req, res) => {
-  const country = req.query.country
-  const apiKey = req.headers['x-api-key']
+  const country = req.query.country;
+  const apiKey = req.headers['x-api-key'];
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.split(' ')[1];
 
-  if (apiKey !== process.env.API_KEY) {
-    return res.status(403).json({ error: 'Invalid API key' })
+  if (!apiKey || apiKey !== process.env.API_KEY) {
+    return res.status(403).json({ error: 'Invalid or missing API key' });
   }
 
-  const now = Date.now()
-
-  if (configCache && now - lastFetchTime < CACHE_DURATION_MS) {
-    return res.json(applyOverrides(configCache, country))
+  if (!token) {
+    return res.status(401).json({ error: 'Missing authorization token' });
   }
 
   try {
-    const snapshot = await db.collection('config').get()
+    const decoded = await admin.auth().verifyIdToken(token);
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+  
+  const now = Date.now();
+  if (configCache && now - lastFetchTime < CACHE_DURATION_MS) {
+    return res.json(applyOverrides(configCache, country));
+  }
+
+  try {
+    const snapshot = await db.collection('config').get();
     if (snapshot.empty) {
-      return res.status(404).json({ error: 'No configuration found' })
+      return res.status(404).json({ error: 'No configuration found' });
     }
 
-    const freshConfig = []
+    const freshConfig = [];
     snapshot.forEach(doc => {
-      freshConfig.push({ id: doc.id, ...doc.data() })
-    })
+      freshConfig.push({ id: doc.id, ...doc.data() });
+    });
 
-    configCache = freshConfig
-    lastFetchTime = now
-    res.json(applyOverrides(freshConfig, country))
+    configCache = freshConfig;
+    lastFetchTime = now;
+    return res.json(applyOverrides(freshConfig, country));
   } catch (err) {
-    res.status(500).json({ error: 'Internal server error' })
+    return res.status(500).json({ error: 'Internal server error' });
   }
-})
+});
 
 // POST /config — create a new parameter
 app.post('/config', async (req, res) => {
